@@ -8,7 +8,7 @@ You can use the shortcut (default `CTRL/CMD + Tab`) or the command `Parse snippe
 
 ## Demo
 
-...
+![demo](https://raw.githubusercontent.com/ArianaKhit/text-snippets-obsidian/main/demo.gif)
 
 ## How to install
 
