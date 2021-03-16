@@ -34,7 +34,7 @@ export default class TextSnippets extends Plugin {
 	}
 
 	async loadSettings() {
-		Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
 
 	async saveSettings() {
@@ -51,7 +51,7 @@ export default class TextSnippets extends Plugin {
 		}
 	}
 
-	getWordBoundaries(editor: any) {
+	getWordBoundaries(editor: CodeMirror.Editor) {
 		var cursor = editor.getCursor();
 		var line = cursor.line;
 		var word = editor.findWordAt({
@@ -72,7 +72,6 @@ export default class TextSnippets extends Plugin {
 			},
 		};
 	}
-
 
 	onTrigger(mode: string) {
 		let activeLeaf: any = this.app.workspace.activeLeaf;
@@ -103,12 +102,12 @@ export default class TextSnippets extends Plugin {
 		}
 	}
 
-	adjustCursor(editor: CodeMirror.Editor, cursor: CodeMirror.Posi, newStr: string, oldStr: string) {
+	adjustCursor(editor: CodeMirror.Editor, cursor: CodeMirror.Position, newStr: string, oldStr: string) {
 		var cursorOffset = newStr.length - oldStr.length;
 		this.adjustCursorOffset(editor, cursor, cursorOffset);
 	}
 
-	adjustCursorOffset(editor: any, cursor: any, cursorOffset: any) {
+	adjustCursorOffset(editor: CodeMirror.Editor, cursor: CodeMirror.Position, cursorOffset: any) {
 		editor.setCursor({
 			line: cursor.line,
 			ch: cursor.ch + cursorOffset
