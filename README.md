@@ -14,6 +14,7 @@ You can use the shortcut (default `CTRL/CMD + Tab`) or the command `Run snippet 
 
 - Use ```$end$``` to place the cursor after replacement in specific position
 - Use ```$nl$``` to add line break in multiline snippet
+- ```$nl$``` ignores next line break in _Snippets_ settings, if the snippet ends with ```$end$```, add additional newline
 
 ## How to install
 
