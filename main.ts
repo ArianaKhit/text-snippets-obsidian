@@ -41,6 +41,17 @@ export default class TextSnippets extends Plugin {
 		await this.saveData(this.settings)
 	}
 
+
+	UpdateSplit(newlineSymbol: string) {
+		var nlSymb = newlineSymbol;
+		var nlSymb = nlSymb.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+		var rg = '(?<!' + nlSymb +')\\n';
+		const regex = new RegExp(rg);
+		var splited = this.settings.snippets_file.split(regex);
+		splited = splited.filter(item => item);
+		this.settings.snippets = splited;
+	}
+
 	getSelectedText(editor: CodeMirror.Editor) {
 		if (editor.somethingSelected()) {
 			return editor.getSelection();
@@ -76,10 +87,25 @@ export default class TextSnippets extends Plugin {
 	onTrigger(mode: string) {
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let editor = activeLeaf.view.sourceMode.cmEditor;
-		var cursor = editor.getCursor();
+		var cursorOrig = editor.getCursor();
 		var selectedText = this.getSelectedText(editor);
-		var newStr = "";
+		var cursor = editor.getCursor('from');
+		var wordBoundaries = this.getWordBoundaries(editor);
 		var snippets =  this.settings.snippets;
+		var endSymbol = this.settings.endSymbol;
+		var nlSymb = this.settings.newlineSymbol;
+
+		var selectedWoSpaces = selectedText.split(' ').join('');
+
+		if (selectedWoSpaces == '' && cursorOrig.ch == cursor.ch) {
+
+			editor.execCommand('goWordLeft');
+			editor.execCommand('goWordLeft');
+			selectedText = this.getSelectedText(editor);
+			cursor = editor.getCursor('from');
+		}
+
+		var newStr = "";
 
 		var i;
 		for (i in snippets){
@@ -90,14 +116,43 @@ export default class TextSnippets extends Plugin {
 			}
 		}
 
+		newStr = newStr.split('\n').join('');
+		var nlinesCount = 0;
+		
+		var rawEnd = newStr.indexOf(endSymbol);
+		if (rawEnd == -1) {
+			rawEnd = newStr.length;
+		}
+		var lastNl = newStr.substring(0, rawEnd).lastIndexOf(nlSymb);
+		if (lastNl != -1) {
+			var endPosIndex = rawEnd - lastNl - nlSymb.length - cursor.ch;
+			
+		} else {
+			var endPosIndex = rawEnd;
+		}
+
+		nlSymb = nlSymb.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');	//no special symbols in nlSymb
+		var rg = nlSymb + '\\n' + '|' + nlSymb;
+		const regex = new RegExp(rg);
+		const regexF = new RegExp(rg, 'g');
+
+		nlinesCount = (newStr.substring(0, rawEnd).match(regexF) || []).length;
+		newStr = newStr.split(regex).join('\n');
+
+		newStr = newStr.replace(endSymbol,'');
+
 		if(newStr == "") {
 			editor.setCursor({
-				line: cursor.line,
-				ch: cursor.ch
+				line: cursorOrig.line,
+				ch: cursorOrig.ch
 			});
 		} else {
 			editor.replaceSelection(newStr);
-			this.adjustCursor(editor, cursor, newStr, selectedText);
+			editor.setCursor({
+				line: cursor.line + nlinesCount,
+				ch: cursor.ch + endPosIndex
+			});
+
 			editor.focus();
 		}
 	}
@@ -118,11 +173,15 @@ export default class TextSnippets extends Plugin {
 interface TextSnippetsSettings {
 	snippets_file: string;
 	snippets: string[];
+	endSymbol: string;
+	newlineSymbol: string;
 }
 
 const DEFAULT_SETTINGS: TextSnippetsSettings = {
 	snippets_file: "snippets : It is an obsidian plugin, that replaces your selected text.",
 	snippets : ["snippets : It is an obsidian plugin, that replaces your selected text."],
+	endSymbol: '$end$',
+	newlineSymbol: '$nl$',
 }
 
 class TextSnippetsSettingsTab extends PluginSettingTab {
@@ -151,11 +210,42 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 			.setValue(this.plugin.settings.snippets_file)
 			.onChange(async (value) => {
 				this.plugin.settings.snippets_file = value;
-				var splited = value.split("\n");
-				splited = splited.filter(item => item);
-				this.plugin.settings.snippets = splited;
+				this.plugin.UpdateSplit(this.plugin.settings.newlineSymbol);
 				await this.plugin.saveSettings();
 			})
-			);
+		);
+		new Setting(containerEl)
+		.setName("Cursor end position mark")
+		.setDesc("Places the cursor to the mark position after inserting a snippet (default: $end$).\nMark does not appear anywhere within the snippet.")
+		.setClass("text-snippets-cursor")
+		.addTextArea((text) =>
+			text
+			.setPlaceholder("$end$")
+			.setValue(this.plugin.settings.endSymbol)
+			.onChange(async (value) => {
+				if (value == '') {
+					value = '$end$';
+				}
+				this.plugin.settings.endSymbol = value;
+				await this.plugin.saveSettings();
+			})
+		);
+		new Setting(containerEl)
+		.setName("Newline mark")
+		.setDesc("Ignores newline after mark, replace it with a newline character after expanding (default: $nl$).\nNecessary to write before every line break in multiline snippets.")
+		.setClass("text-snippets-newline")
+		.addTextArea((text) =>
+			text
+			.setPlaceholder("$nl$")
+			.setValue(this.plugin.settings.newlineSymbol)
+			.onChange(async (value) => {
+				if (value == '') {
+					value = '$nl$';
+				}
+				this.plugin.settings.newlineSymbol = value;
+				this.plugin.UpdateSplit(value);
+				await this.plugin.saveSettings();
+			})
+		);
 	}
 }

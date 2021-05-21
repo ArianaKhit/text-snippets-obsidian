@@ -1,3 +1,16 @@
+.text-snippets-cursor > * > textarea{
+  height: 30px;
+  padding-top: 2px;
+  padding-bottom: 0;
+}
+
+.text-snippets-newline > * > textarea{
+  height: 30px;
+  padding-top: 2px;
+  padding-bottom: 0;
+}
+
+
 .text-snippets-class > * > textarea{
   width:40em;
   height: 100%;

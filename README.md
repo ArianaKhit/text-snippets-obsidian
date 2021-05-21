@@ -10,6 +10,11 @@ You can use the shortcut (default `CTRL/CMD + Tab`) or the command `Run snippet 
 
 ![demo](https://raw.githubusercontent.com/ArianaKhit/text-snippets-obsidian/main/demo.gif)
 
+## Features
+
+- Use ```$end$``` to place the cursor after replacement in specific position
+- Use ```$nl$``` to add line break in multiline snippet
+
 ## How to install
 
 ### In Obsidian app
