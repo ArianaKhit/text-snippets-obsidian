@@ -9,7 +9,6 @@ import {
 
 export default class TextSnippets extends Plugin {
 	settings: TextSnippetsSettings;
-	private cmEditors: CodeMirror.Editor[];
 
 	onInit() {}
 
@@ -25,13 +24,6 @@ export default class TextSnippets extends Plugin {
 				modifiers: ["Mod"],
 				key: "tab"
 			}],
-		});
-
-		this.cmEditors = [];
-		this.registerCodeMirror((cm) => {
-			this.cmEditors.push(cm);
-			// the callback has to be called through another function in order for 'this' to work
-			cm.on('keydown', (cm, event) => this.handleKeyDown(cm, event));
 		});
 
 		this.addSettingTab(new TextSnippetsSettingsTab(this.app, this));
@@ -154,7 +146,6 @@ export default class TextSnippets extends Plugin {
 				line: cursorOrig.line,
 				ch: cursorOrig.ch
 			});
-			this.nextStop();
 		} else {
 			editor.replaceSelection(newStr);
 			editor.setCursor({
@@ -177,24 +168,6 @@ export default class TextSnippets extends Plugin {
 			ch: cursor.ch + cursorOffset
 		});
 	}
-
-	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void { 
-		if (event.key == 'Tab' && this.settings.useTab) { 
-			this.onTrigger("replace");
-			event.preventDefault();
-		}
-	}
-
-	nextStop(): void {
-		let activeLeaf: any = this.app.workspace.activeLeaf;
-		let cm = activeLeaf.view.sourceMode.cmEditor;
-		var search = cm.getSearchCursor(this.settings.stopSymbol, cm.getCursor());
-		if (search.findNext()) {
-			search.replace("");
-			cm.setCursor(search.from());
-		} else if (this.settings.useTab) 
-		cm.execCommand("insertTab");
-	}
 }
 
 interface TextSnippetsSettings {
@@ -202,8 +175,6 @@ interface TextSnippetsSettings {
 	snippets: string[];
 	endSymbol: string;
 	newlineSymbol: string;
-	stopSymbol: string;
-	useTab: boolean;
 }
 
 const DEFAULT_SETTINGS: TextSnippetsSettings = {
@@ -211,8 +182,6 @@ const DEFAULT_SETTINGS: TextSnippetsSettings = {
 	snippets : ["snippets : It is an obsidian plugin, that replaces your selected text."],
 	endSymbol: '$end$',
 	newlineSymbol: '$nl$',
-	stopSymbol: "<++>",
-	useTab: false,
 }
 
 class TextSnippetsSettingsTab extends PluginSettingTab {
@@ -278,31 +247,5 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			})
 		);
-		new Setting(containerEl)
-		.setName('Stop Symbol')
-		.setDesc('Symbol to jump to when command is called.')
-		.setClass("simple-tabstops-stopsymbol")
-		.addTextArea((text) => text
-			.setPlaceholder('')
-			.setValue(this.plugin.settings.stopSymbol)
-			.onChange(async (value) => {
-				if (value =='') {
-					value = '$++$';
-				}
-				this.plugin.settings.stopSymbol = value;
-				await this.plugin.saveSettings();
-			})
-			);
-
-		new Setting(containerEl)
-		.setName("Use Tab")
-		.setDesc("Uses the Tab key as the trigger")
-		.addToggle(toggle =>
-			toggle.setValue(this.plugin.settings.useTab)
-			.onChange(async (value) => {
-				this.plugin.settings.useTab = !this.plugin.settings.useTab;
-				await this.plugin.saveSettings();
-			})
-			);
 	}
 }
