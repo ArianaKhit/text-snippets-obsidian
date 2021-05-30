@@ -9,6 +9,7 @@ import {
 
 export default class TextSnippets extends Plugin {
 	settings: TextSnippetsSettings;
+	private cmEditors: CodeMirror.Editor[];
 
 	onInit() {}
 
@@ -26,6 +27,13 @@ export default class TextSnippets extends Plugin {
 			}],
 		});
 
+		this.cmEditors = [];
+		this.registerCodeMirror((cm) => {
+			this.cmEditors.push(cm);
+			// the callback has to be called through another function in order for 'this' to work
+			cm.on('keydown', (cm, event) => this.handleKeyDown(cm, event));
+		});
+
 		this.addSettingTab(new TextSnippetsSettingsTab(this.app, this));
 	}
 
@@ -40,7 +48,6 @@ export default class TextSnippets extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings)
 	}
-
 
 	UpdateSplit(newlineSymbol: string) {
 		var nlSymb = newlineSymbol;
@@ -94,11 +101,12 @@ export default class TextSnippets extends Plugin {
 		var snippets =  this.settings.snippets;
 		var endSymbol = this.settings.endSymbol;
 		var nlSymb = this.settings.newlineSymbol;
+		var stopSymbol = this.settings.stopSymbol;
+		var stopFound = false;
 
 		var selectedWoSpaces = selectedText.split(' ').join('');
 
 		if (selectedWoSpaces == '' && cursorOrig.ch == cursor.ch) {
-
 			editor.execCommand('goWordLeft');
 			editor.execCommand('goWordLeft');
 			selectedText = this.getSelectedText(editor);
@@ -118,18 +126,24 @@ export default class TextSnippets extends Plugin {
 
 		newStr = newStr.split('\n').join('');
 		var nlinesCount = 0;
-		
-		var rawEnd = newStr.indexOf(endSymbol);
-		if (rawEnd == -1) {
-			rawEnd = newStr.length;
-		}
-		var lastNl = newStr.substring(0, rawEnd).lastIndexOf(nlSymb);
-		if (lastNl != -1) {
-			var endPosIndex = rawEnd - lastNl - nlSymb.length - cursor.ch;
-			
+		if (newStr.indexOf(stopSymbol) == -1) {
+			var rawEnd = newStr.indexOf(endSymbol);
+			if (rawEnd == -1) {
+				rawEnd = newStr.length;
+			}
+			var lastNl = newStr.substring(0, rawEnd).lastIndexOf(nlSymb);
+			if (lastNl != -1) {
+				var endPosIndex = rawEnd - lastNl - nlSymb.length - cursor.ch;
+				
+			} else {
+				var endPosIndex = rawEnd;
+			}
 		} else {
-			var endPosIndex = rawEnd;
+			var endPosIndex = 0;
+			var nlinesCount = 0;
+			stopFound = true;
 		}
+		
 
 		nlSymb = nlSymb.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');	//no special symbols in nlSymb
 		var rg = nlSymb + '\\n' + '|' + nlSymb;
@@ -146,6 +160,7 @@ export default class TextSnippets extends Plugin {
 				line: cursorOrig.line,
 				ch: cursorOrig.ch
 			});
+			this.nextStop();
 		} else {
 			editor.replaceSelection(newStr);
 			editor.setCursor({
@@ -153,6 +168,14 @@ export default class TextSnippets extends Plugin {
 				ch: cursor.ch + endPosIndex
 			});
 
+			if (stopFound) {
+				editor.setCursor({
+					line: cursorOrig.line,
+					ch: cursorOrig.ch
+				});
+
+				this.nextStop();
+			}
 			editor.focus();
 		}
 	}
@@ -168,6 +191,24 @@ export default class TextSnippets extends Plugin {
 			ch: cursor.ch + cursorOffset
 		});
 	}
+
+	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void { 
+		if (event.key == 'Tab' && this.settings.useTab) { 
+			this.onTrigger("replace");
+			event.preventDefault();
+		}
+	}
+
+	nextStop(): void {
+		let activeLeaf: any = this.app.workspace.activeLeaf;
+		let cm = activeLeaf.view.sourceMode.cmEditor;
+		var search = cm.getSearchCursor(this.settings.stopSymbol, cm.getCursor());
+		if (search.findNext()) {
+			search.replace("");
+			cm.setCursor(search.from());
+		} else if (this.settings.useTab) 
+		cm.execCommand("insertTab");
+	}
 }
 
 interface TextSnippetsSettings {
@@ -175,6 +216,8 @@ interface TextSnippetsSettings {
 	snippets: string[];
 	endSymbol: string;
 	newlineSymbol: string;
+	stopSymbol: string;
+	useTab: boolean;
 }
 
 const DEFAULT_SETTINGS: TextSnippetsSettings = {
@@ -182,6 +225,8 @@ const DEFAULT_SETTINGS: TextSnippetsSettings = {
 	snippets : ["snippets : It is an obsidian plugin, that replaces your selected text."],
 	endSymbol: '$end$',
 	newlineSymbol: '$nl$',
+	stopSymbol: "$tb$",
+	useTab: false,
 }
 
 class TextSnippetsSettingsTab extends PluginSettingTab {
@@ -247,5 +292,31 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			})
 		);
+		new Setting(containerEl)
+		.setName('Stop Symbol')
+		.setDesc('Symbol to jump to when command is called.')
+		.setClass("simple-tabstops-stopsymbol")
+		.addTextArea((text) => text
+			.setPlaceholder('')
+			.setValue(this.plugin.settings.stopSymbol)
+			.onChange(async (value) => {
+				if (value =='') {
+					value = '$tb$';
+				}
+				this.plugin.settings.stopSymbol = value;
+				await this.plugin.saveSettings();
+			})
+			);
+
+		new Setting(containerEl)
+		.setName("Use Tab")
+		.setDesc("Uses the Tab key as the trigger")
+		.addToggle(toggle =>
+			toggle.setValue(this.plugin.settings.useTab)
+			.onChange(async (value) => {
+				this.plugin.settings.useTab = !this.plugin.settings.useTab;
+				await this.plugin.saveSettings();
+			})
+			);
 	}
 }

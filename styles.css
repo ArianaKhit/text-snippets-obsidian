@@ -1,15 +1,8 @@
-.text-snippets-cursor > * > textarea{
+.text-snippets-cursor > * > textarea, .simple-tabstops-stopsymbol > * > textarea, .text-snippets-newline > * > textarea{
   height: 30px;
   padding-top: 2px;
   padding-bottom: 0;
 }
-
-.text-snippets-newline > * > textarea{
-  height: 30px;
-  padding-top: 2px;
-  padding-bottom: 0;
-}
-
 
 .text-snippets-class > * > textarea{
   width:40em;
