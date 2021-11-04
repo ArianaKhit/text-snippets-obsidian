@@ -171,7 +171,7 @@ export default class TextSnippets extends Plugin {
 			if (stopFound) {
 				editor.setCursor({
 					line: cursorOrig.line,
-					ch: cursorOrig.ch
+					ch: 0
 				});
 
 				this.nextStop();
