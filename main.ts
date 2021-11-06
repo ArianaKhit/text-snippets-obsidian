@@ -106,7 +106,7 @@ export default class TextSnippets extends Plugin {
 
 		var selectedWoSpaces = selectedText.split(' ').join('');
 
-		if (selectedWoSpaces == '' && cursorOrig.ch == cursor.ch) {
+		if (selectedWoSpaces == '' || selectedWoSpaces == '$' && cursorOrig.ch == cursor.ch) {
 			editor.execCommand('goWordLeft');
 			editor.execCommand('goWordLeft');
 			selectedText = this.getSelectedText(editor);
