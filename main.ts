@@ -103,10 +103,11 @@ export default class TextSnippets extends Plugin {
 		var nlSymb = this.settings.newlineSymbol;
 		var stopSymbol = this.settings.stopSymbol;
 		var stopFound = false;
+        var ignored = ['$', '{', '}', '[', ']', '(', ')']
 
 		var selectedWoSpaces = selectedText.split(' ').join('');
 
-		if (selectedWoSpaces == '' || selectedWoSpaces == '$' && cursorOrig.ch == cursor.ch) {
+		if (selectedWoSpaces == '' || ignored.indexOf(selectedWoSpaces[0]) >= 0 && cursorOrig.ch == cursor.ch) {
 			editor.execCommand('goWordLeft');
 			editor.execCommand('goWordLeft');
 			selectedText = this.getSelectedText(editor);
