@@ -7,6 +7,8 @@ import {
 	MarkdownView,
 } from "obsidian";
 
+
+
 export default class TextSnippets extends Plugin {
 	settings: TextSnippetsSettings;
 	private cmEditors: CodeMirror.Editor[];
@@ -20,7 +22,7 @@ export default class TextSnippets extends Plugin {
 		this.addCommand({
 			id: "text-snippets",
 			name: "Run snippet replacement",
-			callback: () => this.onTrigger("replace"),
+			callback: () => this.insertSnippet(),
 			hotkeys: [{
 				modifiers: ["Mod"],
 				key: "tab"
@@ -39,6 +41,13 @@ export default class TextSnippets extends Plugin {
 
 	onunload() {
 		console.log("Unloading text snippet plugin");
+
+		this.cmEditors = [];
+		this.registerCodeMirror((cm) => {
+			this.cmEditors.push(cm);
+			// the callback has to be called through another function in order for 'this' to work
+			cm.off('keydown', (cm, event) => this.handleKeyDown(cm, event));
+		});
 	}
 
 	async loadSettings() {
@@ -91,10 +100,11 @@ export default class TextSnippets extends Plugin {
 		};
 	}
 
-	onTrigger(mode: string) {
+	insertSnippet(key : string = ''): boolean {
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let editor = activeLeaf.view.sourceMode.cmEditor;
 		var cursorOrig = editor.getCursor();
+		var wasSelection = editor.somethingSelected();
 		var selectedText = this.getSelectedText(editor);
 		var cursor = editor.getCursor('from');
 		var wordBoundaries = this.getWordBoundaries(editor);
@@ -103,15 +113,17 @@ export default class TextSnippets extends Plugin {
 		var nlSymb = this.settings.newlineSymbol;
 		var stopSymbol = this.settings.stopSymbol;
 		var stopFound = false;
+		var wordDelimiters = Array.from(this.settings.wordDelimiters);
 
 		var selectedWoSpaces = selectedText.split(' ').join('');
 
-		if (selectedWoSpaces == '' && cursorOrig.ch == cursor.ch) {
+		if (selectedWoSpaces == '' || wordDelimiters.indexOf(selectedWoSpaces[0]) >= 0 && cursorOrig.ch == cursor.ch) {
 			editor.execCommand('goWordLeft');
 			editor.execCommand('goWordLeft');
 			selectedText = this.getSelectedText(editor);
 			cursor = editor.getCursor('from');
 		}
+
 
 		var newStr = "";
 
@@ -122,6 +134,22 @@ export default class TextSnippets extends Plugin {
 			if (selectedText == snippet[0]) {
 				newStr = snippet[1];
 			}
+		}
+
+		var endCursor = editor.getCursor('to');
+		if (key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line)) {
+			if (wasSelection == false) {
+				editor.getDoc().setSelection(cursorOrig, cursorOrig);
+			}
+			return false;
+		}
+
+		if (newStr == "") {
+			if (wasSelection == false) {
+				editor.getDoc().setSelection(cursorOrig, cursorOrig);
+			}
+			if (key == 'Space')	return false;
+			return this.nextStop();
 		}
 
 		newStr = newStr.split('\n').join('');
@@ -160,7 +188,7 @@ export default class TextSnippets extends Plugin {
 				line: cursorOrig.line,
 				ch: cursorOrig.ch
 			});
-			this.nextStop();
+			return this.nextStop();
 		} else {
 			editor.replaceSelection(newStr);
 			editor.setCursor({
@@ -170,14 +198,15 @@ export default class TextSnippets extends Plugin {
 
 			if (stopFound) {
 				editor.setCursor({
-					line: cursorOrig.line,
-					ch: cursorOrig.ch
+					line: cursor.line,
+					ch: cursor.ch
 				});
 
-				this.nextStop();
+				return this.nextStop();
 			}
 			editor.focus();
 		}
+		return true;
 	}
 
 	adjustCursor(editor: CodeMirror.Editor, cursor: CodeMirror.Position, newStr: string, oldStr: string) {
@@ -193,21 +222,25 @@ export default class TextSnippets extends Plugin {
 	}
 
 	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void { 
-		if (event.key == 'Tab' && this.settings.useTab) { 
-			this.onTrigger("replace");
-			event.preventDefault();
+		if ((event.key == 'Tab' && this.settings.useTab) || (event.code == 'Space' && this.settings.useSpace)) {
+			if (this.insertSnippet(event.code)) {
+				event.preventDefault();
+			}
 		}
 	}
 
-	nextStop(): void {
+	nextStop(): boolean {
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let cm = activeLeaf.view.sourceMode.cmEditor;
 		var search = cm.getSearchCursor(this.settings.stopSymbol, cm.getCursor());
 		if (search.findNext()) {
 			search.replace("");
 			cm.setCursor(search.from());
-		} else if (this.settings.useTab) 
-		cm.execCommand("insertTab");
+			return true;
+		} else if (this.settings.useTab) {
+			return false;
+		}
+		return false;
 	}
 }
 
@@ -218,6 +251,9 @@ interface TextSnippetsSettings {
 	newlineSymbol: string;
 	stopSymbol: string;
 	useTab: boolean;
+	useSpace: boolean;
+	wordDelimiters: string;
+
 }
 
 const DEFAULT_SETTINGS: TextSnippetsSettings = {
@@ -226,7 +262,9 @@ const DEFAULT_SETTINGS: TextSnippetsSettings = {
 	endSymbol: '$end$',
 	newlineSymbol: '$nl$',
 	stopSymbol: "$tb$",
-	useTab: false,
+	useTab: true,
+	useSpace: false,
+	wordDelimiters: "$()[]{}<>,.!?;:\'\"\\/",
 }
 
 class TextSnippetsSettingsTab extends PluginSettingTab {
@@ -261,7 +299,7 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 		);
 		new Setting(containerEl)
 		.setName("Cursor end position mark")
-		.setDesc("Places the cursor to the mark position after inserting a snippet (default: $end$).\nMark does not appear anywhere within the snippet.")
+		.setDesc("Places the cursor to the mark position after inserting a snippet (default: $end$).\nMark does not appear anywhere within the snippet. Do not use together with Stop Symbol.")
 		.setClass("text-snippets-cursor")
 		.addTextArea((text) =>
 			text
@@ -295,7 +333,7 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 		new Setting(containerEl)
 		.setName('Stop Symbol')
 		.setDesc('Symbol to jump to when command is called.')
-		.setClass("simple-tabstops-stopsymbol")
+		.setClass("text-snippets-tabstops")
 		.addTextArea((text) => text
 			.setPlaceholder('')
 			.setValue(this.plugin.settings.stopSymbol)
@@ -309,8 +347,8 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-		.setName("Use Tab")
-		.setDesc("Uses the Tab key as the trigger")
+		.setName("Expand on Tab")
+		.setDesc("Use the Tab key as the trigger.")
 		.addToggle(toggle =>
 			toggle.setValue(this.plugin.settings.useTab)
 			.onChange(async (value) => {
@@ -318,5 +356,29 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			})
 			);
+		new Setting(containerEl)
+		.setName("Expand on Space")
+		.setDesc("Use the Space bar button as the trigger.")
+		.addToggle(toggle =>
+			toggle.setValue(this.plugin.settings.useSpace)
+			.onChange(async (value) => {
+				this.plugin.settings.useSpace = !this.plugin.settings.useSpace;
+				await this.plugin.saveSettings();
+			})
+			);
+
+		new Setting(containerEl)
+		.setName('Word delimiters')
+		.setDesc('Сharacters for specifying the boundary between separate words.')
+		.setClass("text-snippets-delimiter")
+		.addTextArea((text) => text
+			.setPlaceholder('')
+			.setValue(this.plugin.settings.wordDelimiters)
+			.onChange(async (value) => {
+				this.plugin.settings.wordDelimiters = value;
+				await this.plugin.saveSettings();
+			})
+			);
+
 	}
 }
