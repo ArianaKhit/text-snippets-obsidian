@@ -7,8 +7,6 @@ import {
 	MarkdownView,
 } from "obsidian";
 
-
-
 export default class TextSnippets extends Plugin {
 	settings: TextSnippetsSettings;
 	private cmEditors: CodeMirror.Editor[];
@@ -22,7 +20,7 @@ export default class TextSnippets extends Plugin {
 		this.addCommand({
 			id: "text-snippets",
 			name: "Run snippet replacement",
-			callback: () => this.insertSnippet(),
+			callback: () => this.SnippetOnTrigger(),
 			hotkeys: [{
 				modifiers: ["Mod"],
 				key: "tab"
@@ -100,34 +98,21 @@ export default class TextSnippets extends Plugin {
 		};
 	}
 
-	insertSnippet(key : string = ''): boolean {
-		let activeLeaf: any = this.app.workspace.activeLeaf;
-		let editor = activeLeaf.view.sourceMode.cmEditor;
-		var cursorOrig = editor.getCursor();
-		var wasSelection = editor.somethingSelected();
+	findSnippet(editor : CodeMirror.Editor, cursorOrig : CodeMirror.Position, cursor : CodeMirror.Position) : string {
 		var selectedText = this.getSelectedText(editor);
-		var cursor = editor.getCursor('from');
-		var wordBoundaries = this.getWordBoundaries(editor);
-		var snippets =  this.settings.snippets;
-		var endSymbol = this.settings.endSymbol;
-		var nlSymb = this.settings.newlineSymbol;
-		var stopSymbol = this.settings.stopSymbol;
-		var stopFound = false;
 		var wordDelimiters = Array.from(this.settings.wordDelimiters);
-
 		var selectedWoSpaces = selectedText.split(' ').join('');
+		var newStr = "";
 
 		if (selectedWoSpaces == '' || wordDelimiters.indexOf(selectedWoSpaces[0]) >= 0 && cursorOrig.ch == cursor.ch) {
 			editor.execCommand('goWordLeft');
 			editor.execCommand('goWordLeft');
 			selectedText = this.getSelectedText(editor);
-			cursor = editor.getCursor('from');
+			var cursor = editor.getCursor('from');
 		}
 
-
-		var newStr = "";
-
 		var i;
+		var snippets =  this.settings.snippets;
 		for (i in snippets){
 			var snippet = snippets[i].split(' : ');
 
@@ -135,77 +120,94 @@ export default class TextSnippets extends Plugin {
 				newStr = snippet[1];
 			}
 		}
+		return newStr;
+	}
 
-		var endCursor = editor.getCursor('to');
-		if (key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line)) {
-			if (wasSelection == false) {
-				editor.getDoc().setSelection(cursorOrig, cursorOrig);
-			}
-			return false;
-		}
+	calculateCursorEndPos(nStr : string, cursor : CodeMirror.Position, endPosition : any): string {
+		var nlSymb = this.settings.newlineSymbol;
+		var endSymbol = this.settings.endSymbol;
+		var stopSymbol = this.settings.stopSymbol;
+		var newStr = nStr.split('\n').join('');
 
-		if (newStr == "") {
-			if (wasSelection == false) {
-				editor.getDoc().setSelection(cursorOrig, cursorOrig);
-			}
-			if (key == 'Space')	return false;
-			return this.nextStop();
-		}
-
-		newStr = newStr.split('\n').join('');
-		var nlinesCount = 0;
 		if (newStr.indexOf(stopSymbol) == -1) {
 			var rawEnd = newStr.indexOf(endSymbol);
-			if (rawEnd == -1) {
-				rawEnd = newStr.length;
-			}
+			if (rawEnd == -1)	rawEnd = newStr.length;
+			
 			var lastNl = newStr.substring(0, rawEnd).lastIndexOf(nlSymb);
-			if (lastNl != -1) {
-				var endPosIndex = rawEnd - lastNl - nlSymb.length - cursor.ch;
-				
-			} else {
-				var endPosIndex = rawEnd;
-			}
+			if (lastNl != -1)	var endPosIndex = rawEnd - lastNl - nlSymb.length - cursor.ch;
+			else 				var endPosIndex = rawEnd;
 		} else {
 			var endPosIndex = 0;
-			var nlinesCount = 0;
-			stopFound = true;
 		}
-		
+
 
 		nlSymb = nlSymb.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');	//no special symbols in nlSymb
 		var rg = nlSymb + '\\n' + '|' + nlSymb;
 		const regex = new RegExp(rg);
 		const regexF = new RegExp(rg, 'g');
+		var nlinesCount = (newStr.substring(0, rawEnd).match(regexF) || []).length;
 
-		nlinesCount = (newStr.substring(0, rawEnd).match(regexF) || []).length;
+		endPosition.nlinesCount = nlinesCount;
+		endPosition.position = endPosIndex;
+
 		newStr = newStr.split(regex).join('\n');
-
 		newStr = newStr.replace(endSymbol,'');
+		return newStr;
+	}
 
-		if(newStr == "") {
+
+	insertSnippet(key : string = '', snippetStartpos : CodeMirror.Position = {ch:-1, line:-1}): boolean {
+		let activeLeaf: any = this.app.workspace.activeLeaf;
+		let editor = activeLeaf.view.sourceMode.cmEditor;
+		var cursorOrig = editor.getCursor();
+		var wasSelection = editor.somethingSelected();
+		var cursor = editor.getCursor('from');
+		var wordBoundaries = this.getWordBoundaries(editor);
+		var stopSymbol = this.settings.stopSymbol;
+		var pasteSymbol = this.settings.pasteSymbol;
+		var stopFound = false;
+		var newStr = "";
+
+		newStr = this.findSnippet(editor, cursorOrig, cursor);
+		cursor = editor.getCursor('from');
+
+		//proceed Tab and Spacebar
+		var endCursor = editor.getCursor('to');
+		if (newStr == "" || 
+			(key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line)) )  {
+			if (wasSelection == false) {
+				editor.getDoc().setSelection(cursorOrig, cursorOrig);
+			}
+			if (key == 'Space')	return false;
+			if (newStr == "") {
+				editor.setCursor(cursorOrig);
+				return this.nextStop();
+			}	
+		}
+
+		//find end position
+		var endPosition = {nlinesCount: 0, position: 0};
+		newStr = this.calculateCursorEndPos(newStr, cursor, endPosition);
+		if (newStr.indexOf(stopSymbol) != -1)	stopFound = true;
+		if (newStr.indexOf(pasteSymbol) != -1)	snippetStartpos = cursor;
+
+		editor.replaceSelection(newStr);
+
+		if (stopFound) {
 			editor.setCursor({
-				line: cursorOrig.line,
-				ch: cursorOrig.ch
+				line: cursor.line,
+				ch: cursor.ch
 			});
+
 			return this.nextStop();
 		} else {
-			editor.replaceSelection(newStr);
 			editor.setCursor({
-				line: cursor.line + nlinesCount,
-				ch: cursor.ch + endPosIndex
+				line: cursor.line + endPosition.nlinesCount,
+				ch: cursor.ch + endPosition.position
 			});
-
-			if (stopFound) {
-				editor.setCursor({
-					line: cursor.line,
-					ch: cursor.ch
-				});
-
-				return this.nextStop();
-			}
-			editor.focus();
 		}
+
+		editor.focus();
 		return true;
 	}
 
@@ -223,8 +225,26 @@ export default class TextSnippets extends Plugin {
 
 	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void { 
 		if ((event.key == 'Tab' && this.settings.useTab) || (event.code == 'Space' && this.settings.useSpace)) {
-			if (this.insertSnippet(event.code)) {
-				event.preventDefault();
+			this.SnippetOnTrigger(event.code, true);
+		}
+	}
+
+	SnippetOnTrigger(key : string = '', preventDef: boolean=false) {
+		let activeLeaf: any = this.app.workspace.activeLeaf;
+		let cm = activeLeaf.view.sourceMode.cmEditor;
+		var cursorSt = cm.getCursor();
+		if (this.insertSnippet(key, cursorSt)) {
+			if (preventDef)		event.preventDefault();
+
+			if (cursorSt.ch >=0 && cursorSt.line >= 0) {		//paste text from clipboard
+				var cursorOrig = cm.getCursor();
+				navigator.clipboard.readText().then(
+					(clipText) => {
+						var search = cm.getSearchCursor(this.settings.pasteSymbol, cursorSt);
+						if (search.findNext()) {
+							search.replace(clipText);
+						}
+					});
 			}
 		}
 	}
@@ -250,6 +270,7 @@ interface TextSnippetsSettings {
 	endSymbol: string;
 	newlineSymbol: string;
 	stopSymbol: string;
+	pasteSymbol: string;
 	useTab: boolean;
 	useSpace: boolean;
 	wordDelimiters: string;
@@ -262,6 +283,7 @@ const DEFAULT_SETTINGS: TextSnippetsSettings = {
 	endSymbol: '$end$',
 	newlineSymbol: '$nl$',
 	stopSymbol: "$tb$",
+	pasteSymbol: "$pst$",
 	useTab: true,
 	useSpace: false,
 	wordDelimiters: "$()[]{}<>,.!?;:\'\"\\/",
@@ -342,6 +364,23 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 					value = '$tb$';
 				}
 				this.plugin.settings.stopSymbol = value;
+				await this.plugin.saveSettings();
+			})
+			);
+
+
+		new Setting(containerEl)
+		.setName('Clipboard paste Symbol')
+		.setDesc('Symbol to be replaced with clipboard content.')
+		.setClass("text-snippets-tabstops")
+		.addTextArea((text) => text
+			.setPlaceholder('')
+			.setValue(this.plugin.settings.pasteSymbol)
+			.onChange(async (value) => {
+				if (value =='') {
+					value = '$pst$';
+				}
+				this.plugin.settings.pasteSymbol = value;
 				await this.plugin.saveSettings();
 			})
 			);

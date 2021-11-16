@@ -1,6 +1,6 @@
 {
   "name": "text-snippets-obsidian",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Plugin for using snippets for for faster typing",
   "main": "main.js",
   "scripts": {
