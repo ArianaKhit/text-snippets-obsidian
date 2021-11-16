@@ -5,6 +5,6 @@
   "version": "0.0.6",
   "author": "Ariana Khitrova",
   "authorUrl": "",
-  "isDesktopOnly": false,
+  "isDesktopOnly": true,
   "minAppVersion": "0.9.16"
 }
