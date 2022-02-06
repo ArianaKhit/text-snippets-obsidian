@@ -96,13 +96,14 @@ class TextSnippets extends obsidian.Plugin {
     }
     getWordBoundaries(editor) {
         var cursor = editor.getCursor();
+        var ch = cursor.ch;
         var line = cursor.line;
-        var word = editor.findWordAt({
+        var word = editor.wordAt({
             line: line,
-            ch: cursor.ch
+            ch: cursor
         });
-        var wordStart = word.anchor.ch;
-        var wordEnd = word.head.ch;
+        var wordStart = word.from.ch;
+        var wordEnd = word.to.ch;
         return {
             start: {
                 line: line,
