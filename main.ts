@@ -16,7 +16,6 @@ export default class TextSnippets extends Plugin {
 	async onload() {
 		console.log("Loading snippets plugin");
 		await this.loadSettings();
-
 		this.addCommand({
 			id: "text-snippets",
 			name: "Run snippet replacement",
@@ -32,17 +31,33 @@ export default class TextSnippets extends Plugin {
 			this.cmEditors.push(cm);
 			// the callback has to be called through another function in order for 'this' to work
 			cm.on('keydown', (cm, event) => this.handleKeyDown(cm, event));
+			this.settings.isWYSISWYG = (typeof cm.wordAt === 'function');
+			
+			if(this.settings.isWYSISWYG) {
+				this.registerDomEvent(document, 'keydown', (event: KeyboardEvent) => this.handleKeyDown(cm, event));
+			}
 		});
 
+		if(this.settings.isWYSISWYG) {
+			let editor = this.app.workspace.activeLeaf.view.sourceMode.cmEditor;
+			this.settings.isWYSISWYG = (typeof editor.wordAt === 'function');
+			this.registerDomEvent(document, 'keydown', (event: KeyboardEvent) => this.handleKeyDown(editor, event));
+		}
+
 		this.addSettingTab(new TextSnippetsSettingsTab(this.app, this));
+		await this.saveSettings();
 	}
 
 	onunload() {
 		console.log("Unloading text snippet plugin");
 
+
+		this.app.workspace.off('keydown', this.handleKeyDown);
+
 		this.cmEditors = [];
 		this.registerCodeMirror((cm) => {
 			this.cmEditors.push(cm);
+		this.settings.isWYSISWYG = (typeof cm.wordAt === 'function');
 			// the callback has to be called through another function in order for 'this' to work
 			cm.off('keydown', (cm, event) => this.handleKeyDown(cm, event));
 		});
@@ -79,12 +94,24 @@ export default class TextSnippets extends Plugin {
 	getWordBoundaries(editor: CodeMirror.Editor) {
 		var cursor = editor.getCursor();
 		var line = cursor.line;
-		var word = editor.findWordAt({
-			line: line,
-			ch: cursor.ch
-		});
-		var wordStart = word.anchor.ch;
-		var wordEnd = word.head.ch;
+		var ch = cursor.ch;
+
+		if(this.settings.isWYSISWYG == false) {
+			var word = editor.findWordAt({
+				line: line,
+				ch: cursor.ch
+			});			
+			var wordStart = word.anchor.ch;
+			var wordEnd = word.head.ch;
+		} else {
+			var word = editor.wordAt({
+				line: line,
+				ch: cursor.ch
+			});
+			var wordStart = word.from.ch;
+			var wordEnd = word.to.ch;
+		}
+
 
 		return {
 			start: {
@@ -162,7 +189,11 @@ export default class TextSnippets extends Plugin {
 		var cursorOrig = editor.getCursor();
 		var wasSelection = editor.somethingSelected();
 		var cursor = editor.getCursor('from');
-		var wordBoundaries = this.getWordBoundaries(editor);
+		if(wasSelection) {
+			var wordBoundaries = {start: cursor, end: editor.getCursor('to')};
+		} else {
+			var wordBoundaries = this.getWordBoundaries(editor);
+		}
 		var stopSymbol = this.settings.stopSymbol;
 		var pasteSymbol = this.settings.pasteSymbol;
 		var stopFound = false;
@@ -234,13 +265,31 @@ export default class TextSnippets extends Plugin {
 		let cm = activeLeaf.view.sourceMode.cmEditor;
 		var cursorSt = cm.getCursor();
 		if (this.insertSnippet(key, cursorSt)) {
-			if (preventDef)		event.preventDefault();
 
+			this.settings.isWYSISWYG = (typeof cm.wordAt === 'function');
+
+			if (preventDef) {
+				event.preventDefault();
+				if (this.settings.isWYSISWYG && key == 'Tab'){
+					// delete '\t' in Live preview
+					var search = cm.searchCursor('\t', cursorSt);
+					if (search.findPrevious()) {
+						search.replace('');
+					}
+				}
+			}
+
+			
 			if (cursorSt.ch >=0 && cursorSt.line >= 0) {		//paste text from clipboard
 				var cursorOrig = cm.getCursor();
 				navigator.clipboard.readText().then(
 					(clipText) => {
-						var search = cm.getSearchCursor(this.settings.pasteSymbol, cursorSt);
+
+						if(this.settings.isWYSISWYG == false) {
+							var search = cm.getSearchCursor(this.settings.pasteSymbol, cursorSt);
+						} else {
+							var search = cm.searchCursor(this.settings.pasteSymbol, cursorSt);
+						}
 						if (search.findNext()) {
 							search.replace(clipText);
 						}
@@ -252,10 +301,21 @@ export default class TextSnippets extends Plugin {
 	nextStop(): boolean {
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let cm = activeLeaf.view.sourceMode.cmEditor;
-		var search = cm.getSearchCursor(this.settings.stopSymbol, cm.getCursor());
+
+		if(this.settings.isWYSISWYG == false) {
+			var search = cm.getSearchCursor(this.settings.stopSymbol, cm.getCursor());
+		} else {
+			var search = cm.searchCursor(this.settings.stopSymbol, cm.getCursor());
+		}
+
 		if (search.findNext()) {
 			search.replace("");
-			cm.setCursor(search.from());
+
+			if(this.settings.isWYSISWYG == false) {
+				cm.setCursor(search.from());
+			} else {
+				cm.setCursor(search.current().from);
+			}
 			return true;
 		} else if (this.settings.useTab) {
 			return false;
@@ -274,6 +334,7 @@ interface TextSnippetsSettings {
 	useTab: boolean;
 	useSpace: boolean;
 	wordDelimiters: string;
+	isWYSIWYG: boolean;
 
 }
 
@@ -287,6 +348,7 @@ const DEFAULT_SETTINGS: TextSnippetsSettings = {
 	useTab: true,
 	useSpace: false,
 	wordDelimiters: "$()[]{}<>,.!?;:\'\"\\/",
+	isWYSIWYG: false,
 }
 
 class TextSnippetsSettingsTab extends PluginSettingTab {
@@ -402,6 +464,16 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 			toggle.setValue(this.plugin.settings.useSpace)
 			.onChange(async (value) => {
 				this.plugin.settings.useSpace = !this.plugin.settings.useSpace;
+				await this.plugin.saveSettings();
+			})
+			);
+		new Setting(containerEl)
+		.setName("Live Preview Mode")
+		.setDesc("Toggle manually if not correct. You should restart plugin after changing this option.")
+		.addToggle(toggle =>
+			toggle.setValue(this.plugin.settings.isWYSISWYG)
+			.onChange(async (value) => {
+				this.plugin.settings.isWYSISWYG = !this.plugin.settings.isWYSISWYG;
 				await this.plugin.saveSettings();
 			})
 			);
