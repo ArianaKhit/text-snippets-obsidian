@@ -38,17 +38,19 @@ export default class TextSnippets extends Plugin {
 			}
 		});
 
-		if(this.settings.isWYSISWYG) {
-			let editor = this.app.workspace.activeLeaf.view.sourceMode.cmEditor;
-			this.settings.isWYSISWYG = (typeof editor.wordAt === 'function');
-			this.registerDomEvent(document, 'keydown', (event: KeyboardEvent) => this.handleKeyDown(editor, event));
-		}
+        if (this.settings.isWYSISWYG) {
+            this.app.workspace.onLayoutReady(() => {
+                let editor = this.app.workspace.activeLeaf.view.sourceMode.cmEditor;
+                this.settings.isWYSISWYG = (typeof editor.wordAt === 'function');
+                this.registerDomEvent(document, 'keydown', (event) => this.handleKeyDown(editor, event));
+            }
+        )}
 
 		this.addSettingTab(new TextSnippetsSettingsTab(this.app, this));
 		await this.saveSettings();
 	}
 
-	onunload() {
+	async onunload() {
 		console.log("Unloading text snippet plugin");
 
 
