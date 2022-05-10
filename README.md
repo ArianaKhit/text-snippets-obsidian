@@ -26,6 +26,28 @@ First, you assign a folder for your multiline snippets in the plugin settings.
 Then you create files in that folder. The name of the file becomes the snippet "alias", and the contents of the file become the text the alias will be replaced with.
 Supported syntax : `$tb$`. Adding this will move the cursor to this location after replacement.
 You do not need `$end$, $nl$` here.
+
+#### Example
+having a file named `Anki` in your watched folder with these contents
+```
+---
+Q:  $tb$
+A→
+
+
+---
+```
+will substitute `Anki ` with
+```
+---
+Q:
+A→
+
+
+---
+```
+with the cursor placed at the location of `$tb$`
+
 ### In the snippet Textbox in settings
 Add yourmultiline snippet to the textbox in settings.
 
@@ -37,14 +59,27 @@ Add yourmultiline snippet to the textbox in settings.
 * Trigger the snippet shortcut without any eligible expansion to jump to the next tabstop
 * When enabling Tab as the shortcut, only if there are no eligilbe expansions nor jumps the, a normal Tab will be inserted
 
+#### Example
+```
+Anki : ---$nl$
+Q:  $tb$ $nl$
+A→ $nl$
+$nl$
+---$nl$
+```
+will substitute `Anki ` with
+```
+---
+Q:
+A→
+
+
+---
+```
+with the cursor placed at the location of `$tb$`
+
 
 # How to install
 
-## In Obsidian app
-
-In Obsidian go to `Settings > Third-party plugins > Community Plugins > Browse` and search for `Text Snippets`.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/text-snippets-obsidian/`.
+git clone this and throw the contents in the plugins folder of your vault.
 
