@@ -6,13 +6,108 @@ import {
   Plugin,
   PluginSettingTab,
   Setting,
-} from 'obsidian';
+	TextAreaComponent,
+	View,
+	TFolder,
+	TFile,
+	TAbstractFile
+} from "obsidian";
+import { PassThrough } from "stream";
+
+
+type StringStringMap = {
+	[key: string]: string;
+};
 
 export default class TextSnippets extends Plugin {
 	settings: TextSnippetsSettings;
 	private cmEditors: CodeMirror.Editor[];
+	mlSnippets: StringStringMap = {};
+	last_modified: Date;
 
 	onInit() {}
+
+	/**
+	 * @type function(TFile): boolean
+     * @param {TFile} file - The deleted file
+	 * @returns boolean - this indicates wether the file was a child of multilineFolder, not really needed
+	 * @description if file was in the multiline snippet folder, deletes the entry from mlSnippets
+     * @private
+     */
+	deleteMLsnippet(file: TFile): boolean { // if file of folder gets deleted, delete the snippet from the map
+		if (file.parent.path == this.settings.multilineFolder) {
+			delete this.mlSnippets["file.basename"];
+			return true;
+		}
+		return false;
+	}
+	/**
+	 * @type function(TFile): boolean
+     * @param {TFile} file - The modified file
+	 * @returns boolean - this indicates whether the file was a child of multilineFolder, not really needed
+	 * @description if file was in the multiline snippet folder, updates the contents
+
+     * @private
+     */
+	modifyMLsnippet(file: TFile): boolean { // update the snippet content if a file gets modified
+		if (file.parent.path == this.settings.multilineFolder) {
+			this.app.vault.cachedRead(file).then((content) => this.mlSnippets[file.basename] = content);
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * @type function(TFile): boolean
+     * @param {TFile} file - The renamed file
+	 * @returns boolean - this indicates wether the file was a child of multilineFolder
+	 * @description if file was in the multiline snippet folder, assigns the contents to the new snippet name and deletes the old one
+     * @private
+     */
+	renameMLsnippet(file: TFile): boolean { // if a file gets renamed, assign content to new name and delete old name
+		if (file.parent.path == this.settings.multilineFolder) {
+			let oldname = "";
+			let newname = file.basename;
+			let folder = this.app.vault.getAbstractFileByPath(this.settings.multilineFolder) as TFolder;
+			let files = folder.children.map((f) => (f as TFile).basename);
+			for (const k in this.mlSnippets) {
+				if (k in files) continue;
+				oldname = k;
+				break;
+			}
+			this.mlSnippets[newname] = this.mlSnippets[oldname];
+			delete this.mlSnippets[oldname];
+			return true;
+		}
+		return false;
+	}
+
+
+		/**
+	 * @type function(): void
+	 * @description Initializes mlSnippets and starts updating method.
+     * @private
+     */
+	async initMLSnippets() {
+		let folder = this.app.vault.getAbstractFileByPath(this.settings.multilineFolder);
+		this.app.vault.on("modify", this.modifyMLsnippet.bind(this));
+		this.app.vault.on("rename", this.renameMLsnippet.bind(this));
+		this.app.vault.on("delete", this.deleteMLsnippet.bind(this));
+
+		if (folder instanceof TFolder) {
+
+			folder.children.forEach((f) => {
+				if (f instanceof TFile) {
+					this.app.vault.cachedRead(f).then((replacer) => this.mlSnippets[f.basename] = replacer);
+				}
+			});
+		}
+		else {
+			throw "invalid user input";
+		}
+	}
+
+
 
 	async onload() {
 		console.log("Loading snippets plugin");
@@ -143,6 +238,11 @@ export default class TextSnippets extends Plugin {
 				newStr = snippet[1];
 			}
 		}
+
+		if (selectedText in this.mlSnippets && newStr.length == 0) {
+			newStr = this.mlSnippets[selectedText];
+		}
+
 		return newStr;
 	}
 
@@ -150,8 +250,6 @@ export default class TextSnippets extends Plugin {
 		var nlSymb = this.settings.newlineSymbol;
 		var endSymbol = this.settings.endSymbol;
 		var stopSymbol = this.settings.stopSymbol;
-		var newStr = nStr.split('\n').join('');
-
 		if (newStr.indexOf(stopSymbol) == -1) {
 			var rawEnd = newStr.indexOf(endSymbol);
 			if (rawEnd == -1)	rawEnd = newStr.length;
@@ -202,8 +300,8 @@ export default class TextSnippets extends Plugin {
 
 		//proceed Tab and Spacebar
 		var endCursor = editor.getCursor('to');
-		if (newStr == "" || 
-			(key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line)) )  {
+		if (newStr == "" ||
+			(key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line))) {
 			if (wasSelection == false) {
 				editor.getDoc().setSelection(cursorOrig, cursorOrig);
 			}
@@ -211,7 +309,7 @@ export default class TextSnippets extends Plugin {
 			if (newStr == "") {
 				editor.setCursor(cursorOrig);
 				return this.nextStop();
-			}
+			}	
 		}
 
 		//find end position
@@ -324,6 +422,7 @@ export default class TextSnippets extends Plugin {
 
 interface TextSnippetsSettings {
 	snippets_file: string;
+	multilineFolder: string;
 	snippets: string[];
 	endSymbol: string;
 	newlineSymbol: string;
@@ -338,7 +437,8 @@ interface TextSnippetsSettings {
 
 const DEFAULT_SETTINGS: TextSnippetsSettings = {
 	snippets_file: "snippets : It is an obsidian plugin, that replaces your selected text.",
-	snippets : ["snippets : It is an obsidian plugin, that replaces your selected text."],
+	multilineFolder: "",
+	snippets: ["snippets : It is an obsidian plugin, that replaces your selected text."],
 	endSymbol: '$end$',
 	newlineSymbol: '$nl$',
 	stopSymbol: "$tb$",
@@ -363,22 +463,33 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 		} = this;
 
 		containerEl.empty();
-		containerEl.createEl('h2', {text: 'Text Snippets - Settings'});
+		containerEl.createEl('h2', { text: 'Text Snippets - Settings' });
 
 		new Setting(containerEl)
-		.setName("Snippets")
-		.setDesc("Type here your snippets in format 'snippet : result', one per line. Empty lines will be ignored. Ctrl+Tab to replace (hotkey can be changed).")
-		.setClass("text-snippets-class")
-		.addTextArea((text) =>
-			text
-			.setPlaceholder("before : after")
-			.setValue(this.plugin.settings.snippets_file)
-			.onChange(async (value) => {
-				this.plugin.settings.snippets_file = value;
-				this.plugin.UpdateSplit(this.plugin.settings.newlineSymbol);
-				await this.plugin.saveSettings();
-			})
-		);
+			.setName("Snippets")
+			.setDesc("Type here your snippets in format 'snippet : result', one per line. Empty lines will be ignored. Ctrl+Tab to replace (hotkey can be changed).")
+			.setClass("text-snippets-class")
+			.addTextArea((text) =>
+				text
+					.setPlaceholder("before : after")
+					.setValue(this.plugin.settings.snippets_file)
+					.onChange(async (value) => {
+						this.plugin.settings.snippets_file = value;
+						this.plugin.UpdateSplit(this.plugin.settings.newlineSymbol);
+						await this.plugin.saveSettings();
+					})
+			);
+		new Setting(containerEl)
+			.setName('Multiline Snippet Path')
+			.setDesc('This specifies the path where the multiline snippets for this plugin are stored')
+			.addText(text => text
+				.setPlaceholder('Enter your path')
+				.setValue(this.plugin.settings.multilineFolder)
+				.onChange(async (value) => {
+					this.plugin.settings.multilineFolder = value;
+					await this.plugin.saveSettings();
+				}));
+
 		new Setting(containerEl)
 		.setName("Cursor end position mark")
 		.setDesc("Places the cursor to the mark position after inserting a snippet (default: $end$).\nMark does not appear anywhere within the snippet. Do not use together with Stop Symbol.")
