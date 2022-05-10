@@ -83,3 +83,10 @@ with the cursor placed at the location of `$tb$`
 
 git clone this and throw the contents in the plugins folder of your vault.
 
+
+# TODO
+- [] better documentation
+- fix other substitution methods besides substituting on `Space` if needed
+- error handling:
+  - when user specifies a wrong path
+  - if snippets haven't initialized yet
