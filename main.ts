@@ -2,7 +2,7 @@ import {
   App,
   Editor,
   MarkdownView,
-  Notice,
+  // Notice,
   Plugin,
   PluginSettingTab,
   Setting,
@@ -124,15 +124,15 @@ export default class TextSnippets extends Plugin {
 	findSnippet(editor : CodeMirror.Editor, cursorOrig : CodeMirror.Position, cursor : CodeMirror.Position) : string {
 		var selectedText = this.getSelectedText(editor);
 		var wordDelimiters = Array.from(this.settings.wordDelimiters);
-		var selectedWoSpaces = selectedText.split(' ').join('');
+		var selectedWoSpaces = '' + selectedText.split(' ').join('');
 		var newStr = "";
-
-		if (selectedWoSpaces == '' || wordDelimiters.indexOf(selectedWoSpaces[0]) >= 0 && cursorOrig.ch == cursor.ch) {
-			editor.execCommand('goWordLeft');
-			editor.execCommand('goWordLeft');
-			selectedText = this.getSelectedText(editor);
-			var cursor = editor.getCursor('from');
-		}
+		// without this finds next stop everywhere in file
+		// if (selectedWoSpaces == '' || (selectedWoSpaces.length > 0 && wordDelimiters.indexOf(selectedWoSpaces[0]) >= 0 && cursorOrig.ch == cursor.ch)) {
+			// editor.execCommand('goWordLeft');
+			// editor.execCommand('goWordLeft');
+			// selectedText = this.getSelectedText(editor);
+			// var cursor = editor.getCursor('from');
+		// }
 
 		var i;
 		var snippets =  this.settings.snippets;
@@ -180,7 +180,6 @@ export default class TextSnippets extends Plugin {
 
 
 	insertSnippet(key : string = '', snippetStartpos : CodeMirror.Position = {ch:-1, line:-1}): boolean {
-		// new Notice('insert snippet');
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let editor = activeLeaf.view.sourceMode.cmEditor;
 		// let editor = activeLeaf.view.editor;
@@ -207,13 +206,12 @@ export default class TextSnippets extends Plugin {
 			(key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line)) )  {
 			if (wasSelection == false) {
 				editor.getDoc().setSelection(cursorOrig, cursorOrig);
-		// new Notice('replace');
 			}
 			if (key == 'Space')	return false;
 			if (newStr == "") {
 				editor.setCursor(cursorOrig);
 				return this.nextStop();
-			}	
+			}
 		}
 
 		//find end position
@@ -223,7 +221,7 @@ export default class TextSnippets extends Plugin {
 		if (newStr.indexOf(pasteSymbol) != -1)	snippetStartpos = cursor;
 
 		editor.replaceSelection(newStr);
-		// new Notice('replaced?');
+
 
 		if (stopFound) {
 			editor.setCursor({
@@ -255,8 +253,7 @@ export default class TextSnippets extends Plugin {
 		});
 	}
 
-	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void { 
-		// new Notice(event.key);
+	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void {
 		if ((event.key == 'Tab' && this.settings.useTab) || (event.code == 'Space' && this.settings.useSpace)) {
 			this.SnippetOnTrigger(event.code, true);
 		}
@@ -278,7 +275,6 @@ export default class TextSnippets extends Plugin {
 					}
 				}
 			}
-
 			
 			if (cursorSt.ch >=0 && cursorSt.line >= 0) {		//paste text from clipboard
 				var cursorOrig = cm.getCursor();
@@ -297,7 +293,7 @@ export default class TextSnippets extends Plugin {
 			}
 			return true;
 		}
-		return false;
+		return this.nextStop();
 	}
 
 	nextStop(): boolean {
