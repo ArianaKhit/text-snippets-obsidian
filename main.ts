@@ -1,11 +1,12 @@
 import {
-	App,
-	Plugin,
-	PluginSettingTab,
-	Setting,
-	TextAreaComponent,
-	MarkdownView,
-} from "obsidian";
+  App,
+  Editor,
+  MarkdownView,
+  Notice,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+} from 'obsidian';
 
 export default class TextSnippets extends Plugin {
 	settings: TextSnippetsSettings;
@@ -16,6 +17,13 @@ export default class TextSnippets extends Plugin {
 	async onload() {
 		console.log("Loading snippets plugin");
 		await this.loadSettings();
+		
+		this.addSettingTab(new TextSnippetsSettingsTab(this.app, this));
+		if (!this.app.vault.config.legacyEditor != this.settings.isWYSIWYG) {
+			this.settings.isWYSIWYG = !this.app.vault.config.legacyEditor;
+			await this.saveSettings();
+		}
+
 		this.addCommand({
 			id: "text-snippets",
 			name: "Run snippet replacement",
@@ -31,35 +39,15 @@ export default class TextSnippets extends Plugin {
 			this.cmEditors.push(cm);
 			// the callback has to be called through another function in order for 'this' to work
 			cm.on('keydown', (cm, event) => this.handleKeyDown(cm, event));
-			this.settings.isWYSISWYG = (typeof cm.wordAt === 'function');
-			
-			if(this.settings.isWYSISWYG) {
-				this.registerDomEvent(document, 'keydown', (event: KeyboardEvent) => this.handleKeyDown(cm, event));
-			}
 		});
-
-        if (this.settings.isWYSISWYG) {
-            this.app.workspace.onLayoutReady(() => {
-                let editor = this.app.workspace.activeLeaf.view.sourceMode.cmEditor;
-                this.settings.isWYSISWYG = (typeof editor.wordAt === 'function');
-                this.registerDomEvent(document, 'keydown', (event) => this.handleKeyDown(editor, event));
-            }
-        )}
-
-		this.addSettingTab(new TextSnippetsSettingsTab(this.app, this));
-		await this.saveSettings();
 	}
 
 	async onunload() {
 		console.log("Unloading text snippet plugin");
 
-
-		this.app.workspace.off('keydown', this.handleKeyDown);
-
 		this.cmEditors = [];
 		this.registerCodeMirror((cm) => {
 			this.cmEditors.push(cm);
-		this.settings.isWYSISWYG = (typeof cm.wordAt === 'function');
 			// the callback has to be called through another function in order for 'this' to work
 			cm.off('keydown', (cm, event) => this.handleKeyDown(cm, event));
 		});
@@ -98,7 +86,7 @@ export default class TextSnippets extends Plugin {
 		var line = cursor.line;
 		var ch = cursor.ch;
 
-		if(this.settings.isWYSISWYG == false) {
+		if(this.settings.isWYSIWYG == false) {
 			var word = editor.findWordAt({
 				line: line,
 				ch: cursor.ch
@@ -113,7 +101,6 @@ export default class TextSnippets extends Plugin {
 			var wordStart = word.from.ch;
 			var wordEnd = word.to.ch;
 		}
-
 
 		return {
 			start: {
@@ -186,15 +173,18 @@ export default class TextSnippets extends Plugin {
 
 
 	insertSnippet(key : string = '', snippetStartpos : CodeMirror.Position = {ch:-1, line:-1}): boolean {
+		new Notice('insert snippet');
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let editor = activeLeaf.view.sourceMode.cmEditor;
+		// let editor = activeLeaf.view.editor;
 		var cursorOrig = editor.getCursor();
 		var wasSelection = editor.somethingSelected();
 		var cursor = editor.getCursor('from');
+		var wordBoundaries;
 		if(wasSelection) {
-			var wordBoundaries = {start: cursor, end: editor.getCursor('to')};
+			wordBoundaries = {start: cursor, end: editor.getCursor('to')};
 		} else {
-			var wordBoundaries = this.getWordBoundaries(editor);
+			wordBoundaries = this.getWordBoundaries(editor);
 		}
 		var stopSymbol = this.settings.stopSymbol;
 		var pasteSymbol = this.settings.pasteSymbol;
@@ -210,6 +200,7 @@ export default class TextSnippets extends Plugin {
 			(key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line)) )  {
 			if (wasSelection == false) {
 				editor.getDoc().setSelection(cursorOrig, cursorOrig);
+		new Notice('replace');
 			}
 			if (key == 'Space')	return false;
 			if (newStr == "") {
@@ -225,6 +216,7 @@ export default class TextSnippets extends Plugin {
 		if (newStr.indexOf(pasteSymbol) != -1)	snippetStartpos = cursor;
 
 		editor.replaceSelection(newStr);
+		new Notice('replaced?');
 
 		if (stopFound) {
 			editor.setCursor({
@@ -257,22 +249,23 @@ export default class TextSnippets extends Plugin {
 	}
 
 	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void { 
+		new Notice(event.key);
 		if ((event.key == 'Tab' && this.settings.useTab) || (event.code == 'Space' && this.settings.useSpace)) {
 			this.SnippetOnTrigger(event.code, true);
 		}
 	}
 
-	SnippetOnTrigger(key : string = '', preventDef: boolean=false) {
+	SnippetOnTrigger(key : string = '', preventDef: boolean=false): boolean {
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let cm = activeLeaf.view.sourceMode.cmEditor;
 		var cursorSt = cm.getCursor();
 		if (this.insertSnippet(key, cursorSt)) {
 
-			this.settings.isWYSISWYG = (typeof cm.wordAt === 'function');
+			this.settings.isWYSIWYG = (typeof cm.wordAt === 'function');
 
 			if (preventDef) {
 				event.preventDefault();
-				if (this.settings.isWYSISWYG && key == 'Tab'){
+				if (this.settings.isWYSIWYG && key == 'Tab'){
 					// delete '\t' in Live preview
 					var search = cm.searchCursor('\t', cursorSt);
 					if (search.findPrevious()) {
@@ -287,7 +280,7 @@ export default class TextSnippets extends Plugin {
 				navigator.clipboard.readText().then(
 					(clipText) => {
 
-						if(this.settings.isWYSISWYG == false) {
+						if(this.settings.isWYSIWYG == false) {
 							var search = cm.getSearchCursor(this.settings.pasteSymbol, cursorSt);
 						} else {
 							var search = cm.searchCursor(this.settings.pasteSymbol, cursorSt);
@@ -297,14 +290,16 @@ export default class TextSnippets extends Plugin {
 						}
 					});
 			}
+			return true;
 		}
+		return false;
 	}
 
 	nextStop(): boolean {
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let cm = activeLeaf.view.sourceMode.cmEditor;
 
-		if(this.settings.isWYSISWYG == false) {
+		if(this.settings.isWYSIWYG == false) {
 			var search = cm.getSearchCursor(this.settings.stopSymbol, cm.getCursor());
 		} else {
 			var search = cm.searchCursor(this.settings.stopSymbol, cm.getCursor());
@@ -313,7 +308,7 @@ export default class TextSnippets extends Plugin {
 		if (search.findNext()) {
 			search.replace("");
 
-			if(this.settings.isWYSISWYG == false) {
+			if(this.settings.isWYSIWYG == false) {
 				cm.setCursor(search.from());
 			} else {
 				cm.setCursor(search.current().from);
@@ -473,9 +468,9 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 		.setName("Live Preview Mode")
 		.setDesc("Toggle manually if not correct. You should restart plugin after changing this option.")
 		.addToggle(toggle =>
-			toggle.setValue(this.plugin.settings.isWYSISWYG)
+			toggle.setValue(this.plugin.settings.isWYSIWYG)
 			.onChange(async (value) => {
-				this.plugin.settings.isWYSISWYG = !this.plugin.settings.isWYSISWYG;
+				this.plugin.settings.isWYSIWYG = !this.plugin.settings.isWYSIWYG;
 				await this.plugin.saveSettings();
 			})
 			);
