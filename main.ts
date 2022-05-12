@@ -2,7 +2,7 @@ import {
   App,
   Editor,
   MarkdownView,
-  Notice,
+  // Notice,
   Plugin,
   PluginSettingTab,
   Setting,
@@ -173,7 +173,7 @@ export default class TextSnippets extends Plugin {
 
 
 	insertSnippet(key : string = '', snippetStartpos : CodeMirror.Position = {ch:-1, line:-1}): boolean {
-		new Notice('insert snippet');
+		// new Notice('insert snippet');
 		let activeLeaf: any = this.app.workspace.activeLeaf;
 		let editor = activeLeaf.view.sourceMode.cmEditor;
 		// let editor = activeLeaf.view.editor;
@@ -200,7 +200,7 @@ export default class TextSnippets extends Plugin {
 			(key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line)) )  {
 			if (wasSelection == false) {
 				editor.getDoc().setSelection(cursorOrig, cursorOrig);
-		new Notice('replace');
+		// new Notice('replace');
 			}
 			if (key == 'Space')	return false;
 			if (newStr == "") {
@@ -216,7 +216,7 @@ export default class TextSnippets extends Plugin {
 		if (newStr.indexOf(pasteSymbol) != -1)	snippetStartpos = cursor;
 
 		editor.replaceSelection(newStr);
-		new Notice('replaced?');
+		// new Notice('replaced?');
 
 		if (stopFound) {
 			editor.setCursor({
@@ -249,7 +249,7 @@ export default class TextSnippets extends Plugin {
 	}
 
 	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void { 
-		new Notice(event.key);
+		// new Notice(event.key);
 		if ((event.key == 'Tab' && this.settings.useTab) || (event.code == 'Space' && this.settings.useSpace)) {
 			this.SnippetOnTrigger(event.code, true);
 		}
