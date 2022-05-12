@@ -2,7 +2,7 @@ import {
   App,
   Editor,
   MarkdownView,
-  // Notice,
+  Notice,
   Plugin,
   PluginSettingTab,
   Setting,
@@ -19,8 +19,10 @@ export default class TextSnippets extends Plugin {
 		await this.loadSettings();
 		
 		this.addSettingTab(new TextSnippetsSettingsTab(this.app, this));
-		if (!this.app.vault.config.legacyEditor != this.settings.isWYSIWYG) {
-			this.settings.isWYSIWYG = !this.app.vault.config.legacyEditor;
+		//expected warning
+		var isLegacy = this.app.vault.config.legacyEditor;
+		if (!isLegacy != this.settings.isWYSIWYG) {
+			this.settings.isWYSIWYG = !isLegacy;
 			await this.saveSettings();
 		}
 
@@ -81,27 +83,32 @@ export default class TextSnippets extends Plugin {
 		}
 	}
 
+	isWord(c: any) : boolean {
+		//if character is not a whiespace or a delimiter
+		var notWord = ' \t\n\r\v' + this.settings.wordDelimiters;
+		if (notWord.indexOf(c) <= -1 ) {
+			return true;
+		}
+		return false;
+	}
+	SnippetsWordAt(cm : CodeMirror.Editor, pos: CodeMirror.Position) : any {
+		var start = pos.ch, end = start, line = cm.getLine(pos.line);
+		while (start && this.isWord(line.charAt(start - 1))) --start;
+		while (end < line.length && this.isWord(line.charAt(end))) ++end;
+		var fr = {line: pos.line, ch: start};
+		var t = {line: pos.line, ch: end};
+		return {from: fr, to: t, word: line.slice(start, end)};
+	}
+
 	getWordBoundaries(editor: CodeMirror.Editor) {
 		var cursor = editor.getCursor();
 		var line = cursor.line;
 		var ch = cursor.ch;
 
-		if(this.settings.isWYSIWYG == false) {
-			var word = editor.findWordAt({
-				line: line,
-				ch: cursor.ch
-			});			
-			var wordStart = word.anchor.ch;
-			var wordEnd = word.head.ch;
-		} else {
-			var word = editor.wordAt({
-				line: line,
-				ch: cursor.ch
-			});
-			var wordStart = word.from.ch;
-			var wordEnd = word.to.ch;
-		}
-
+		var word = this.SnippetsWordAt(editor, cursor);
+		var wordStart = word.from.ch;
+		var wordEnd = word.to.ch;
+		
 		return {
 			start: {
 				line: line,
@@ -260,8 +267,6 @@ export default class TextSnippets extends Plugin {
 		let cm = activeLeaf.view.sourceMode.cmEditor;
 		var cursorSt = cm.getCursor();
 		if (this.insertSnippet(key, cursorSt)) {
-
-			this.settings.isWYSIWYG = (typeof cm.wordAt === 'function');
 
 			if (preventDef) {
 				event.preventDefault();
