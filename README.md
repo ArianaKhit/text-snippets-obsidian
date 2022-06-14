@@ -4,6 +4,16 @@ This is a plugin for Obsidian (https://obsidian.md).
 
 It allows you to replace text templates for faster typing, create your own snippets almost like in many text editors and IDE.
 
+**Live Preview support**: ```check the toggle in plugin settings before using and restart plugin in Options > Community plugins```.
+
+You can use the shortcut (default `CTRL/CMD + Tab`) or the command `Run snippet replacement` by command palette (`CTRL/CMD + P`). There is also an option to use `Tab` and/or `Space` as the shortcut instead. The cursor need to be on the word you want to replace. You can replace text with spaces by selecting all the text.
+
+# Obsidian Text Snippets Plugin
+
+This is a plugin for Obsidian (https://obsidian.md).
+
+It allows you to replace text templates for faster typing, create your own snippets almost like in many text editors and IDE.
+
 # Demo
 
 ![demo](https://raw.githubusercontent.com/ArianaKhit/text-snippets-obsidian/main/demo.gif)
@@ -84,9 +94,7 @@ with the cursor placed at the location of `$tb$`
 git clone this and throw the contents in the plugins folder of your vault.
 
 
-# TODO
-- [] better documentation
-- fix other substitution methods besides substituting on `Space` if needed
-- error handling:
-  - when user specifies a wrong path
-  - if snippets haven't initialized yet
+### Manually installing the plugin
+
+- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/text-snippets-obsidian/`.
+
