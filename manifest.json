@@ -2,7 +2,7 @@
   "id": "text-snippets-obsidian",
   "name": "Text Snippets",
   "description": "Allows you to replace text templates for faster typing, create your own, expand text shortcuts.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": "Ariana Khitrova",
   "authorUrl": "",
   "isDesktopOnly": false,
