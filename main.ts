@@ -35,24 +35,31 @@ export default class TextSnippets extends Plugin {
 				key: "tab"
 			}],
 		});
-
-		this.cmEditors = [];
-		this.registerCodeMirror((cm) => {
-			this.cmEditors.push(cm);
-			// the callback has to be called through another function in order for 'this' to work
-			cm.on('keydown', (cm, event) => this.handleKeyDown(cm, event));
-		});
+		
+		if (isLegacy) {
+			this.cmEditors = [];
+			this.registerCodeMirror((cm) => {
+				this.cmEditors.push(cm);
+				// the callback has to be called through another function in order for 'this' to work
+				cm.on('keydown', (cm, event) => this.handleKeyDown(event));
+			});
+		} else {
+			this.app.workspace.onLayoutReady(() => {
+				this.registerDomEvent(document, 'keydown', (event) => this.handleKeyDown(event));
+			});
+		}
 	}
 
 	async onunload() {
 		console.log("Unloading text snippet plugin");
-
-		this.cmEditors = [];
-		this.registerCodeMirror((cm) => {
-			this.cmEditors.push(cm);
-			// the callback has to be called through another function in order for 'this' to work
-			cm.off('keydown', (cm, event) => this.handleKeyDown(cm, event));
-		});
+		if (!this.settings.isWYSIWYG) {
+			this.cmEditors = [];
+			this.registerCodeMirror((cm) => {
+				this.cmEditors.push(cm);
+				// the callback has to be called through another function in order for 'this' to work
+				cm.off('keydown', (cm, event) => this.handleKeyDown(event));
+			});
+            }
 	}
 
 	async loadSettings() {
@@ -253,7 +260,10 @@ export default class TextSnippets extends Plugin {
 		});
 	}
 
-	handleKeyDown (cm: CodeMirror.Editor, event: KeyboardEvent): void {
+	handleKeyDown (event: KeyboardEvent): void {
+		if (this.app.workspace.getActiveViewOfType(MarkdownView) == null) {
+			return;
+		}
 		if ((event.key == 'Tab' && this.settings.useTab) || (event.code == 'Space' && this.settings.useSpace)) {
 			this.SnippetOnTrigger(event.code, true);
 		}
