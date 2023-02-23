@@ -19,6 +19,7 @@ You can use the shortcut (default `CTRL/CMD + Tab`) or the command `Run snippet 
 - Use ```$tb$``` to add a tabstop for the cursor to jump to (don`t use together with ```$end$```)
 - Trigger the snippet shortcut without any eligible expansion to jump to the next tabstop
 - When enabling `Tab` as the shortcut, only if there are no eligilbe expansions nor jumps the, a normal `Tab` will be inserted
+- Use Regex to match the snippet
 
 ![tabstop-demo](https://raw.githubusercontent.com/Arax20/text-snippets-obsidian/main/tabstop_demo.gif)
 

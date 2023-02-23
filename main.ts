@@ -1,11 +1,11 @@
 import {
-  App,
-  Editor,
-  MarkdownView,
-  // Notice,
-  Plugin,
-  PluginSettingTab,
-  Setting,
+	App,
+	Editor,
+	MarkdownView,
+	// Notice,
+	Plugin,
+	PluginSettingTab,
+	Setting,
 } from 'obsidian';
 
 export default class TextSnippets extends Plugin {
@@ -17,7 +17,7 @@ export default class TextSnippets extends Plugin {
 	async onload() {
 		console.log("Loading snippets plugin");
 		await this.loadSettings();
-		
+
 		this.addSettingTab(new TextSnippetsSettingsTab(this.app, this));
 		//expected warning
 		var isLegacy = this.app.vault.config.legacyEditor;
@@ -108,7 +108,7 @@ export default class TextSnippets extends Plugin {
 		var word = this.SnippetsWordAt(editor, cursor);
 		var wordStart = word.from.ch;
 		var wordEnd = word.to.ch;
-		
+
 		return {
 			start: {
 				line: line,
@@ -128,18 +128,19 @@ export default class TextSnippets extends Plugin {
 		var newStr = "";
 		// without this finds next stop everywhere in file
 		// if (selectedWoSpaces == '' || (selectedWoSpaces.length > 0 && wordDelimiters.indexOf(selectedWoSpaces[0]) >= 0 && cursorOrig.ch == cursor.ch)) {
-			// editor.execCommand('goWordLeft');
-			// editor.execCommand('goWordLeft');
-			// selectedText = this.getSelectedText(editor);
-			// var cursor = editor.getCursor('from');
+		// editor.execCommand('goWordLeft');
+		// editor.execCommand('goWordLeft');
+		// selectedText = this.getSelectedText(editor);
+		// var cursor = editor.getCursor('from');
 		// }
 
+		var useRegex = this.settings.useRegex;
 		var i;
 		var snippets =  this.settings.snippets;
 		for (i in snippets){
 			var snippet = snippets[i].split(' : ');
 
-			if (selectedText == snippet[0]) {
+			if (selectedText == snippet[0] || (useRegex && (new RegExp(snippet[0])).exec(selectedText))) {
 				newStr = snippet[1];
 			}
 		}
@@ -155,7 +156,7 @@ export default class TextSnippets extends Plugin {
 		if (newStr.indexOf(stopSymbol) == -1) {
 			var rawEnd = newStr.indexOf(endSymbol);
 			if (rawEnd == -1)	rawEnd = newStr.length;
-			
+
 			var lastNl = newStr.substring(0, rawEnd).lastIndexOf(nlSymb);
 			if (lastNl != -1)	var endPosIndex = rawEnd - lastNl - nlSymb.length - cursor.ch;
 			else 				var endPosIndex = rawEnd;
@@ -202,7 +203,7 @@ export default class TextSnippets extends Plugin {
 
 		//proceed Tab and Spacebar
 		var endCursor = editor.getCursor('to');
-		if (newStr == "" || 
+		if (newStr == "" ||
 			(key == 'Space' && (cursorOrig.ch != endCursor.ch || cursorOrig.line != endCursor.line)) )  {
 			if (wasSelection == false) {
 				editor.getDoc().setSelection(cursorOrig, cursorOrig);
@@ -275,7 +276,7 @@ export default class TextSnippets extends Plugin {
 					}
 				}
 			}
-			
+
 			if (cursorSt.ch >=0 && cursorSt.line >= 0) {		//paste text from clipboard
 				var cursorOrig = cm.getCursor();
 				navigator.clipboard.readText().then(
@@ -329,6 +330,7 @@ interface TextSnippetsSettings {
 	newlineSymbol: string;
 	stopSymbol: string;
 	pasteSymbol: string;
+	useRegex: boolean;
 	useTab: boolean;
 	useSpace: boolean;
 	wordDelimiters: string;
@@ -343,6 +345,7 @@ const DEFAULT_SETTINGS: TextSnippetsSettings = {
 	newlineSymbol: '$nl$',
 	stopSymbol: "$tb$",
 	pasteSymbol: "$pst$",
+	useRegex: false,
 	useTab: true,
 	useSpace: false,
 	wordDelimiters: "$()[]{}<>,.!?;:\'\"\\/",
@@ -366,127 +369,138 @@ class TextSnippetsSettingsTab extends PluginSettingTab {
 		containerEl.createEl('h2', {text: 'Text Snippets - Settings'});
 
 		new Setting(containerEl)
-		.setName("Snippets")
-		.setDesc("Type here your snippets in format 'snippet : result', one per line. Empty lines will be ignored. Ctrl+Tab to replace (hotkey can be changed).")
-		.setClass("text-snippets-class")
-		.addTextArea((text) =>
-			text
-			.setPlaceholder("before : after")
-			.setValue(this.plugin.settings.snippets_file)
-			.onChange(async (value) => {
-				this.plugin.settings.snippets_file = value;
-				this.plugin.UpdateSplit(this.plugin.settings.newlineSymbol);
-				await this.plugin.saveSettings();
-			})
-		);
+			.setName("Snippets")
+			.setDesc("Type here your snippets in format 'snippet : result', one per line. Empty lines will be ignored. Ctrl+Tab to replace (hotkey can be changed).")
+			.setClass("text-snippets-class")
+			.addTextArea((text) =>
+				text
+					.setPlaceholder("before : after")
+					.setValue(this.plugin.settings.snippets_file)
+					.onChange(async (value) => {
+						this.plugin.settings.snippets_file = value;
+						this.plugin.UpdateSplit(this.plugin.settings.newlineSymbol);
+						await this.plugin.saveSettings();
+					})
+			);
 		new Setting(containerEl)
-		.setName("Cursor end position mark")
-		.setDesc("Places the cursor to the mark position after inserting a snippet (default: $end$).\nMark does not appear anywhere within the snippet. Do not use together with Stop Symbol.")
-		.setClass("text-snippets-cursor")
-		.addTextArea((text) =>
-			text
-			.setPlaceholder("$end$")
-			.setValue(this.plugin.settings.endSymbol)
-			.onChange(async (value) => {
-				if (value == '') {
-					value = '$end$';
-				}
-				this.plugin.settings.endSymbol = value;
-				await this.plugin.saveSettings();
-			})
-		);
+			.setName("Cursor end position mark")
+			.setDesc("Places the cursor to the mark position after inserting a snippet (default: $end$).\nMark does not appear anywhere within the snippet. Do not use together with Stop Symbol.")
+			.setClass("text-snippets-cursor")
+			.addTextArea((text) =>
+				text
+					.setPlaceholder("$end$")
+					.setValue(this.plugin.settings.endSymbol)
+					.onChange(async (value) => {
+						if (value == '') {
+							value = '$end$';
+						}
+						this.plugin.settings.endSymbol = value;
+						await this.plugin.saveSettings();
+					})
+			);
 		new Setting(containerEl)
-		.setName("Newline mark")
-		.setDesc("Ignores newline after mark, replace it with a newline character after expanding (default: $nl$).\nNecessary to write before every line break in multiline snippets.")
-		.setClass("text-snippets-newline")
-		.addTextArea((text) =>
-			text
-			.setPlaceholder("$nl$")
-			.setValue(this.plugin.settings.newlineSymbol)
-			.onChange(async (value) => {
-				if (value == '') {
-					value = '$nl$';
-				}
-				this.plugin.settings.newlineSymbol = value;
-				this.plugin.UpdateSplit(value);
-				await this.plugin.saveSettings();
-			})
-		);
+			.setName("Newline mark")
+			.setDesc("Ignores newline after mark, replace it with a newline character after expanding (default: $nl$).\nNecessary to write before every line break in multiline snippets.")
+			.setClass("text-snippets-newline")
+			.addTextArea((text) =>
+				text
+					.setPlaceholder("$nl$")
+					.setValue(this.plugin.settings.newlineSymbol)
+					.onChange(async (value) => {
+						if (value == '') {
+							value = '$nl$';
+						}
+						this.plugin.settings.newlineSymbol = value;
+						this.plugin.UpdateSplit(value);
+						await this.plugin.saveSettings();
+					})
+			);
 		new Setting(containerEl)
-		.setName('Stop Symbol')
-		.setDesc('Symbol to jump to when command is called.')
-		.setClass("text-snippets-tabstops")
-		.addTextArea((text) => text
-			.setPlaceholder('')
-			.setValue(this.plugin.settings.stopSymbol)
-			.onChange(async (value) => {
-				if (value =='') {
-					value = '$tb$';
-				}
-				this.plugin.settings.stopSymbol = value;
-				await this.plugin.saveSettings();
-			})
+			.setName('Stop Symbol')
+			.setDesc('Symbol to jump to when command is called.')
+			.setClass("text-snippets-tabstops")
+			.addTextArea((text) => text
+				.setPlaceholder('')
+				.setValue(this.plugin.settings.stopSymbol)
+				.onChange(async (value) => {
+					if (value =='') {
+						value = '$tb$';
+					}
+					this.plugin.settings.stopSymbol = value;
+					await this.plugin.saveSettings();
+				})
 			);
 
 
 		new Setting(containerEl)
-		.setName('Clipboard paste Symbol')
-		.setDesc('Symbol to be replaced with clipboard content.')
-		.setClass("text-snippets-tabstops")
-		.addTextArea((text) => text
-			.setPlaceholder('')
-			.setValue(this.plugin.settings.pasteSymbol)
-			.onChange(async (value) => {
-				if (value =='') {
-					value = '$pst$';
-				}
-				this.plugin.settings.pasteSymbol = value;
-				await this.plugin.saveSettings();
-			})
+			.setName('Clipboard paste Symbol')
+			.setDesc('Symbol to be replaced with clipboard content.')
+			.setClass("text-snippets-tabstops")
+			.addTextArea((text) => text
+				.setPlaceholder('')
+				.setValue(this.plugin.settings.pasteSymbol)
+				.onChange(async (value) => {
+					if (value =='') {
+						value = '$pst$';
+					}
+					this.plugin.settings.pasteSymbol = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+
+		new Setting(containerEl)
+			.setName("Use Regular Expression")
+			.setDesc("Use Regex for the snippet. (example: foo\-\\d+ : ## $pst$)")
+			.addToggle(toggle =>
+				toggle.setValue(this.plugin.settings.useRegex)
+					.onChange(async (value) => {
+						this.plugin.settings.useRegex = !this.plugin.settings.useRegex;
+						await this.plugin.saveSettings();
+					})
+			);
+		new Setting(containerEl)
+			.setName("Expand on Tab")
+			.setDesc("Use the Tab key as the trigger.")
+			.addToggle(toggle =>
+				toggle.setValue(this.plugin.settings.useTab)
+					.onChange(async (value) => {
+						this.plugin.settings.useTab = !this.plugin.settings.useTab;
+						await this.plugin.saveSettings();
+					})
+			);
+		new Setting(containerEl)
+			.setName("Expand on Space")
+			.setDesc("Use the Space bar button as the trigger.")
+			.addToggle(toggle =>
+				toggle.setValue(this.plugin.settings.useSpace)
+					.onChange(async (value) => {
+						this.plugin.settings.useSpace = !this.plugin.settings.useSpace;
+						await this.plugin.saveSettings();
+					})
+			);
+		new Setting(containerEl)
+			.setName("Live Preview Mode")
+			.setDesc("Toggle manually if not correct. You should restart plugin after changing this option.")
+			.addToggle(toggle =>
+				toggle.setValue(this.plugin.settings.isWYSIWYG)
+					.onChange(async (value) => {
+						this.plugin.settings.isWYSIWYG = !this.plugin.settings.isWYSIWYG;
+						await this.plugin.saveSettings();
+					})
 			);
 
 		new Setting(containerEl)
-		.setName("Expand on Tab")
-		.setDesc("Use the Tab key as the trigger.")
-		.addToggle(toggle =>
-			toggle.setValue(this.plugin.settings.useTab)
-			.onChange(async (value) => {
-				this.plugin.settings.useTab = !this.plugin.settings.useTab;
-				await this.plugin.saveSettings();
-			})
-			);
-		new Setting(containerEl)
-		.setName("Expand on Space")
-		.setDesc("Use the Space bar button as the trigger.")
-		.addToggle(toggle =>
-			toggle.setValue(this.plugin.settings.useSpace)
-			.onChange(async (value) => {
-				this.plugin.settings.useSpace = !this.plugin.settings.useSpace;
-				await this.plugin.saveSettings();
-			})
-			);
-		new Setting(containerEl)
-		.setName("Live Preview Mode")
-		.setDesc("Toggle manually if not correct. You should restart plugin after changing this option.")
-		.addToggle(toggle =>
-			toggle.setValue(this.plugin.settings.isWYSIWYG)
-			.onChange(async (value) => {
-				this.plugin.settings.isWYSIWYG = !this.plugin.settings.isWYSIWYG;
-				await this.plugin.saveSettings();
-			})
-			);
-
-		new Setting(containerEl)
-		.setName('Word delimiters')
-		.setDesc('Сharacters for specifying the boundary between separate words.')
-		.setClass("text-snippets-delimiter")
-		.addTextArea((text) => text
-			.setPlaceholder('')
-			.setValue(this.plugin.settings.wordDelimiters)
-			.onChange(async (value) => {
-				this.plugin.settings.wordDelimiters = value;
-				await this.plugin.saveSettings();
-			})
+			.setName('Word delimiters')
+			.setDesc('Сharacters for specifying the boundary between separate words.')
+			.setClass("text-snippets-delimiter")
+			.addTextArea((text) => text
+				.setPlaceholder('')
+				.setValue(this.plugin.settings.wordDelimiters)
+				.onChange(async (value) => {
+					this.plugin.settings.wordDelimiters = value;
+					await this.plugin.saveSettings();
+				})
 			);
 
 	}
