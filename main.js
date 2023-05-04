@@ -164,7 +164,12 @@ class TextSnippets extends obsidian.Plugin {
             let start =wordBoundaries.start;
             start.ch -=1;
             editor.getDoc().setSelection(start, wordBoundaries.end);
-            newStr = newStr.slice(6);
+            let checkSpace = this.getSelectedText(editor);
+            if (checkSpace[0]!=' '){
+                start.ch+=1
+                editor.getDoc().setSelection(start, wordBoundaries.end);
+            }
+            newStr = newStr.slice(this.settings.backSymbol.length);
         }
         return newStr;
     }
