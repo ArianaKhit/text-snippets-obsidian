@@ -158,6 +158,19 @@ class TextSnippets extends obsidian.Plugin {
                 newStr = snippet[1];
             }
         }
+        var backSymbol = this.settings.backSymbol;
+        if (newStr.indexOf(backSymbol)==0){
+            var wordBoundaries = this.getWordBoundaries(editor);
+            let start =wordBoundaries.start;
+            start.ch -=1;
+            editor.getDoc().setSelection(start, wordBoundaries.end);
+            let checkSpace = this.getSelectedText(editor);
+            if (checkSpace[0]!=' '){
+                start.ch+=1
+                editor.getDoc().setSelection(start, wordBoundaries.end);
+            }
+            newStr = newStr.slice(this.settings.backSymbol.length);
+        }
         return newStr;
     }
     calculateCursorEndPos(nStr, cursor, endPosition) {
@@ -326,6 +339,7 @@ const DEFAULT_SETTINGS = {
     newlineSymbol: '$nl$',
     stopSymbol: "$tb$",
     pasteSymbol: "$pst$",
+    backSymbol: "$bksp$",
     useTab: true,
     useSpace: false,
     wordDelimiters: "$()[]{}<>,.!?;:\'\"\\/",
@@ -405,6 +419,20 @@ class TextSnippetsSettingsTab extends obsidian.PluginSettingTab {
             .onChange((value) => __awaiter(this, void 0, void 0, function* () {
             if (value == '') {
                 value = '$pst$';
+            }
+            this.plugin.settings.pasteSymbol = value;
+            yield this.plugin.saveSettings();
+        })));
+        new obsidian.Setting(containerEl)
+            .setName('Backspace Symbol')
+            .setDesc('Must be used at the start of a snippet. Removes the character before the snippet,\nFor example, a space.')
+            .setClass("text-snippets-tabstops")
+            .addTextArea((text) => text
+            .setPlaceholder('')
+            .setValue(this.plugin.settings.backSymbol)
+            .onChange((value) => __awaiter(this, void 0, void 0, function* () {
+            if (value == '') {
+                value = '$bksp$';
             }
             this.plugin.settings.pasteSymbol = value;
             yield this.plugin.saveSettings();
